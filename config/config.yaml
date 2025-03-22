@@ -1,0 +1,34 @@
+# Purple Bench Configuration
+
+# Application Settings
+application:
+  name: "Purple Bench"
+  version: "0.2.0"
+  log_level: "INFO"
+  results_directory: "../data/results"
+  logs_directory: "../logs"
+
+# API Settings
+api:
+  timeout_seconds: 60
+  max_retries: 3
+  retry_delay_seconds: 5
+
+# Benchmark Settings
+benchmarks:
+  mitre:
+    enabled: true
+    description: "MITRE ATT&CK Framework Security Evaluation"
+    test_cases_path: "../data/test_cases/mitre"
+  
+  frr:
+    enabled: true
+    description: "Foundational Responsible Release (FRR) Security Evaluation"
+    test_cases_path: "../data/test_cases/frr"
+
+# UI Settings
+ui:
+  theme: "light"
+  max_comparison_models: 4
+  default_chart_type: "bar"
+  show_api_status: true
