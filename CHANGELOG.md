@@ -5,49 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.2] - 2025-03-22
+## [0.3.7] - 2025-03-23
 
 ### Added
-- Added requirements.txt with project dependencies
-- Added app.py with main Streamlit application code
-- Added benchmark_runner.py for interfacing with CyberSecEval 3 tools
-- Added config.py for API key management and model configuration
-- Added utils.py with utility functions for file operations and API handling
-- Added config.yaml with application configuration settings
-- Added directory structure for data storage and test cases
+- Added ability to delete benchmark results from the Results page
+- Implemented delete confirmation dialog for benchmark result deletion
+- Enhanced Results page with clearer benchmark result listing and action buttons
 
-## [0.2.1] - 2025-03-22
+## [0.3.6] - 2025-03-22
+
+### Changed
+- Updated configuration path to use absolute path for storing benchmark results
+
+## [0.3.5] - 2025-03-22
+
+### Fixed
+- Fixed recurring "Unknown benchmark type" error by implementing proper fallback mechanism in result generation
+- Added automatic fallback to MITRE benchmark results for unrecognized benchmark types
+- Improved error handling with detailed warning logs instead of error responses
+
+## [0.3.4] - 2025-03-22
+
+### Fixed
+- Fixed "Unknown benchmark type" error by properly extracting the benchmark type from command parameters
+- Improved benchmark type validation with built-in fallback to 'mitre' for invalid types
+- Added more detailed error logging for benchmark type validation
+- Consolidated benchmark command building logic to reduce code duplication
+
+## [0.3.3] - 2025-03-21
 
 ### Added
-- Added test.md file for testing purposes
+- Added model connection verification functionality
+- Added diagnostic command generation for easier troubleshooting
 
-## [0.2.0] - 2025-03-22
+### Changed
+- Improved error handling in the benchmark runner
+- Enhanced logging for better debugging
+
+## [0.3.2] - 2025-03-15
 
 ### Added
-- Initial project structure
-- Basic Streamlit application setup
-- API key management functionality
-- Integration with Purple Llama's CyberSecEval 3 tool
-- Support for MITRE and FRR benchmark tests
-- Results comparison page
-- GitHub integration
-- Windsurf IDE integration
-- GitHub MCP server configuration for Windsurf
-- Updated project setup instructions for Windsurf
-- File creation workflow using Cascade
-- Detailed GitHub Personal Access Token setup guide
+- Support for multiple LLM providers (OpenAI, Anthropic, etc.)
+- Added FRR benchmark option alongside MITRE
 
-## [0.1.0] - 2025-03-22
+### Changed
+- Refactored benchmark runner for better extensibility
+- Improved UI for benchmark selection and configuration
+
+## [0.3.1] - 2025-03-10
+
 ### Added
-- Deployment guide
-- Setup instructions for environment and dependencies
-- GitHub MCP server configuration
-- Basic application structure
-- Documentation for MITRE and FRR benchmarks integration
+- Result comparison feature for benchmark results
+- Added visualization options for benchmark metrics
 
-### To Do
-- Implement Streamlit UI
-- Create API key management system
-- Build benchmark runner integration
-- Develop results visualization dashboard
-- Add support for additional CyberSecEval 3 benchmarks
+### Fixed
+- Fixed progress reporting in long-running benchmarks
+
+## [0.3.0] - 2025-03-01
+
+### Added
+- Initial implementation of MITRE ATT&CK benchmark
+- Basic UI for running benchmarks and viewing results
+- Support for OpenAI API integration
