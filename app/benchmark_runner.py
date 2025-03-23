@@ -223,7 +223,43 @@ class BenchmarkRunner:
         
         # Simulate reading results from output directory
         # In production, we would parse the actual output files
-        results = self._generate_sample_results(cmd[3], cmd[5], dataset=None if len(cmd) < 8 else cmd[7])  # model_name, benchmark_type, dataset
+        
+        # Extract benchmark_type from the command
+        benchmark_type = None
+        model_name = None
+        dataset = None
+        
+        # Parse command to identify benchmark type and other parameters
+        if 'mitre' in ' '.join(cmd):
+            benchmark_type = 'mitre'
+        elif 'frr' in ' '.join(cmd):
+            benchmark_type = 'frr'
+        elif 'prompt_injection' in ' '.join(cmd):
+            benchmark_type = 'prompt-injection'
+        elif 'visual_prompt_injection' in ' '.join(cmd):
+            benchmark_type = 'visual-prompt-injection'
+            
+        # Extract model name
+        try:
+            if '--model-name' in cmd:
+                model_name_index = cmd.index('--model-name') + 1
+                if model_name_index < len(cmd):
+                    model_name = cmd[model_name_index]
+            elif '--primary-model' in cmd:
+                model_name_index = cmd.index('--primary-model') + 1
+                if model_name_index < len(cmd):
+                    model_name = cmd[model_name_index]
+                    
+            # Extract dataset if present
+            if '--dataset' in cmd:
+                dataset_index = cmd.index('--dataset') + 1
+                if dataset_index < len(cmd):
+                    dataset = cmd[dataset_index]
+        except (ValueError, IndexError):
+            pass
+        
+        # Generate sample results
+        results = self._generate_sample_results(model_name, benchmark_type, dataset=dataset)
         
         if callback:
             callback(1.0, "Benchmark completed!")
