@@ -3,7 +3,7 @@
 # Application Settings
 application:
   name: "Purple Bench"
-  version: "0.2.0"
+  version: "0.4.0"  # Updated version to match CHANGELOG
   log_level: "INFO"
   results_directory: "/Users/brad/Documents/windsurf/purple-bench/data/results"
   logs_directory: "../logs"
@@ -25,6 +25,20 @@ benchmarks:
     enabled: true
     description: "Foundational Responsible Release (FRR) Security Evaluation"
     test_cases_path: "../data/test_cases/frr"
+  
+  prompt_injection:
+    enabled: true
+    description: "Textual Prompt Injection Security Evaluation"
+    test_cases_path: "/Users/brad/Documents/windsurf/purple-bench/data/test_cases/prompt_injection"
+    datasets_path: "/Users/brad/Documents/windsurf/purple-bench/data/datasets/prompt_injection"
+    default_dataset: "prompt_injection.json"
+  
+  visual_prompt_injection:
+    enabled: true
+    description: "Visual Prompt Injection Security Evaluation"
+    test_cases_path: "/Users/brad/Documents/windsurf/purple-bench/data/test_cases/visual_prompt_injection"
+    datasets_path: "/Users/brad/Documents/windsurf/purple-bench/data/datasets/visual_prompt_injection"
+    default_dataset: "cse2_typographic_images"
 
 # UI Settings
 ui:

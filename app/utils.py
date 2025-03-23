@@ -123,23 +123,25 @@ def get_api_key(service_name: str) -> Optional[str]:
         return None
 
 
-def generate_result_filename(model_name: str, benchmark_type: str) -> str:
+def generate_result_filename(model_name: str, benchmark_type: str, dataset: Optional[str] = None) -> str:
     """
     Generate a unique filename for benchmark results
     
     Args:
         model_name: Name of the model being benchmarked
         benchmark_type: Type of benchmark (e.g., 'mitre', 'frr')
+        dataset: Optional dataset name used for the benchmark
         
     Returns:
         str: Unique filename
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_model_name = model_name.replace('/', '_').replace(' ', '_')
-    return f"{safe_model_name}_{benchmark_type}_{timestamp}.json"
+    dataset_suffix = f"_{dataset.replace('.', '_')}" if dataset else ""
+    return f"{safe_model_name}_{benchmark_type}{dataset_suffix}_{timestamp}.json"
 
 
-def save_benchmark_results(results: Dict[str, Any], model_name: str, benchmark_type: str) -> str:
+def save_benchmark_results(results: Dict[str, Any], model_name: str, benchmark_type: str, dataset: Optional[str] = None) -> str:
     """
     Save benchmark results to file
     
@@ -147,6 +149,7 @@ def save_benchmark_results(results: Dict[str, Any], model_name: str, benchmark_t
         results: Benchmark results to save
         model_name: Name of the model
         benchmark_type: Type of benchmark
+        dataset: Optional dataset name used for the benchmark
         
     Returns:
         str: Path to saved file
@@ -159,7 +162,7 @@ def save_benchmark_results(results: Dict[str, Any], model_name: str, benchmark_t
         os.makedirs(results_dir, exist_ok=True)
         
         # Generate filename and path
-        filename = generate_result_filename(model_name, benchmark_type)
+        filename = generate_result_filename(model_name, benchmark_type, dataset)
         filepath = results_dir / filename
         
         # Add metadata
@@ -169,6 +172,10 @@ def save_benchmark_results(results: Dict[str, Any], model_name: str, benchmark_t
             'timestamp': datetime.now().isoformat(),
             'version': config['application']['version']
         }
+        
+        # Add dataset info if provided
+        if dataset:
+            results['metadata']['dataset'] = dataset
         
         # Save to file
         with open(filepath, 'w') as file:
@@ -228,6 +235,7 @@ def list_benchmark_results() -> List[Dict[str, Any]]:
                         'benchmark_type': metadata.get('benchmark_type', 'Unknown'),
                         'timestamp': metadata.get('timestamp', ''),
                         'version': metadata.get('version', ''),
+                        'dataset': metadata.get('dataset', 'Unknown'),
                     })
             except Exception as e:
                 logger.warning(f"Could not process result file {file}: {str(e)}")

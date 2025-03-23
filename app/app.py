@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional, Union, Tuple
 import time
 
 # Import local modules
-from .utils import load_config, get_api_key, list_benchmark_results, load_benchmark_results
+from .utils import load_config, save_benchmark_results, list_benchmark_results, load_benchmark_results, logger
 from .config import api_key_management, get_configured_models
 from .benchmark_runner import BenchmarkRunner
 
@@ -67,7 +67,7 @@ def main():
     
     # Footer
     st.sidebar.markdown("---")
-    st.sidebar.markdown(f"© 2025 {config['application']['name']} v{config['application']['version']}")
+    st.sidebar.markdown(f" 2025 {config['application']['name']} v{config['application']['version']}")
 
 
 def home_page():
@@ -88,6 +88,12 @@ def home_page():
         
         - **Foundational Responsible Release (FRR)**: Evaluates LLMs on cybersecurity, 
           privacy, fairness, and transparency standards.
+        
+        - **Textual Prompt Injection**: Evaluates LLMs' ability to detect and resist 
+          textual prompt injection attacks.
+        
+        - **Visual Prompt Injection**: Evaluates LLMs' ability to detect and resist 
+          visual prompt injection attacks.
         
         ### Getting Started
         
@@ -164,6 +170,9 @@ def run_benchmark_page():
     """
     st.markdown("## Run Security Benchmark")
     
+    # Create benchmark runner
+    benchmark_runner = BenchmarkRunner()
+    
     # Check if any API keys are configured
     models = get_configured_models()
     if not models:
@@ -186,7 +195,9 @@ def run_benchmark_page():
     # Benchmark selection
     benchmark_options = [
         {"value": "mitre", "name": "MITRE ATT&CK Framework"},
-        {"value": "frr", "name": "Foundational Responsible Release (FRR)"}
+        {"value": "frr", "name": "Foundational Responsible Release (FRR)"},
+        {"value": "prompt_injection", "name": "Textual Prompt Injection"},
+        {"value": "visual_prompt_injection", "name": "Visual Prompt Injection"}
     ]
     
     selected_benchmark = st.selectbox(
@@ -197,6 +208,38 @@ def run_benchmark_page():
     
     # Get the selected benchmark value
     selected_benchmark_value = next((b["value"] for b in benchmark_options if b["name"] == selected_benchmark), None)
+    
+    # Dataset selection for prompt injection benchmarks
+    selected_dataset = None
+    if selected_benchmark_value in ["prompt_injection", "visual_prompt_injection"]:
+        # Initialize the dataset manager to list available datasets
+        dataset_options = benchmark_runner.dataset_manager.list_available_datasets(selected_benchmark_value)
+        
+        if not dataset_options:
+            st.warning(f"No datasets available for {selected_benchmark}. Please check your configuration.")
+        else:
+            selected_dataset = st.selectbox(
+                "Select Dataset",
+                options=dataset_options,
+                index=0,
+                key=f"{selected_benchmark_value}_dataset"
+            )
+            
+            # Info about the dataset
+            st.info(f"Using dataset: {selected_dataset}")
+            
+            # Option to download dataset if not already downloaded
+            if not benchmark_runner.dataset_manager.dataset_exists(selected_benchmark_value, selected_dataset):
+                if st.button("Download Dataset"):
+                    with st.spinner(f"Downloading {selected_dataset}..."):
+                        success = benchmark_runner.dataset_manager.download_dataset(
+                            selected_benchmark_value, 
+                            selected_dataset
+                        )
+                        if success:
+                            st.success(f"Dataset {selected_dataset} downloaded successfully!")
+                        else:
+                            st.error(f"Failed to download dataset {selected_dataset}. Please check your connection and try again.")
     
     # Benchmark options
     with st.expander("Benchmark Options"):
@@ -211,6 +254,11 @@ def run_benchmark_page():
     # Run benchmark button
     if st.button("Run Benchmark", disabled=st.session_state.benchmark_running):
         if selected_model_info and selected_benchmark_value:
+            # Check if dataset is required but not selected
+            if selected_benchmark_value in ["prompt_injection", "visual_prompt_injection"] and not selected_dataset:
+                st.error(f"Please select a dataset for {selected_benchmark}")
+                return
+            
             # Set benchmark as running
             st.session_state.benchmark_running = True
             st.session_state.benchmark_progress = 0.0
@@ -243,6 +291,7 @@ def run_benchmark_page():
                     provider=selected_model_info["provider"],
                     api_key=api_key,
                     benchmark_type=selected_benchmark_value,
+                    dataset=selected_dataset,
                     callback=update_progress
                 )
                 
@@ -258,10 +307,16 @@ def run_benchmark_page():
                     st.metric("Overall Score", f"{results.get('overall_score', 0.0):.2f}")
                 
                 with col2:
-                    # Count passed tests
-                    passed_tests = sum(1 for test in results.get('detailed_results', []) if test.get('passed', False))
-                    total_tests = len(results.get('detailed_results', []))
-                    st.metric("Tests Passed", f"{passed_tests}/{total_tests}")
+                    # For prompt injection benchmarks, show successful defenses
+                    if selected_benchmark_value in ["prompt_injection", "visual_prompt_injection"]:
+                        successful = results.get('successful_defenses', 0)
+                        total = results.get('total_samples', 0)
+                        st.metric("Successful Defenses", f"{successful}/{total}")
+                    else:
+                        # Count passed tests for MITRE and FRR
+                        passed_tests = sum(1 for test in results.get('detailed_results', []) if test.get('passed', False))
+                        total_tests = len(results.get('detailed_results', []))
+                        st.metric("Tests Passed", f"{passed_tests}/{total_tests}")
                 
                 # Category scores
                 st.markdown("#### Category Scores")
@@ -274,7 +329,7 @@ def run_benchmark_page():
                 }
                 
                 for category, data in categories.items():
-                    category_data['Category'].append(category.capitalize())
+                    category_data['Category'].append(category.replace('_', ' ').capitalize())
                     category_data['Score'].append(data.get('score', 0.0))
                 
                 df_categories = pd.DataFrame(category_data)
@@ -417,7 +472,7 @@ def results_page():
                 }
                 
                 for category, data in categories.items():
-                    category_data['Category'].append(category.capitalize())
+                    category_data['Category'].append(category.replace('_', ' ').capitalize())
                     category_data['Score'].append(data.get('score', 0.0))
                     category_data['Tests Passed'].append(data.get('tests_passed', 0))
                     category_data['Tests Total'].append(data.get('tests_total', 0))
@@ -556,7 +611,7 @@ def compare_models_page():
                 for category, scores in category_scores.items():
                     for model, score in scores.items():
                         category_data.append({
-                            'Category': category.capitalize(),
+                            'Category': category.replace('_', ' ').capitalize(),
                             'Model': model,
                             'Score': score
                         })
