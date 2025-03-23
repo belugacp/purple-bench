@@ -11,6 +11,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from .utils import load_config, save_benchmark_results, logger
+from .dataset_manager import DatasetManager
 
 
 class BenchmarkRunner:
@@ -22,16 +23,24 @@ class BenchmarkRunner:
         self.results_dir = Path(self.config['application']['results_directory'])
         os.makedirs(self.results_dir, exist_ok=True)
         
+        # Create dataset manager
+        self.dataset_manager = DatasetManager(self.config)
+        
         # Ensure test case directories exist
-        for benchmark in ['mitre', 'frr']:
-            test_case_path = Path(self.config['benchmarks'][benchmark]['test_cases_path'])
-            os.makedirs(test_case_path, exist_ok=True)
+        for benchmark in ['mitre', 'frr', 'prompt_injection', 'visual_prompt_injection']:
+            if benchmark in self.config['benchmarks']:
+                test_case_path = Path(self.config['benchmarks'][benchmark]['test_cases_path'])
+                os.makedirs(test_case_path, exist_ok=True)
+        
+        # Set up logger
+        self.logger = logging.getLogger('purple_bench.benchmark_runner')
     
     def run_benchmark(self, 
                       model_name: str, 
                       provider: str, 
                       api_key: str, 
                       benchmark_type: str,
+                      dataset: Optional[str] = None,
                       callback: Optional[callable] = None) -> Dict[str, Any]:
         """
         Run a benchmark against a specified model
@@ -40,14 +49,34 @@ class BenchmarkRunner:
             model_name: Name of the model to benchmark
             provider: Provider of the model (e.g., 'openai', 'anthropic')
             api_key: API key for the provider
-            benchmark_type: Type of benchmark to run ('mitre' or 'frr')
+            benchmark_type: Type of benchmark to run ('mitre', 'frr', 'prompt_injection', 'visual_prompt_injection')
+            dataset: Optional dataset name for benchmarks that require datasets
             callback: Optional callback function to report progress
             
         Returns:
             Dict containing benchmark results
         """
-        if benchmark_type.lower() not in ['mitre', 'frr']:
-            raise ValueError(f"Unsupported benchmark type: {benchmark_type}. Supported types: mitre, frr")
+        supported_benchmarks = ['mitre', 'frr', 'prompt_injection', 'visual_prompt_injection']
+        normalized_benchmark_type = benchmark_type.lower().replace('-', '_')
+        
+        if normalized_benchmark_type not in supported_benchmarks:
+            error_msg = f"Unsupported benchmark type: {benchmark_type}. Supported types: {', '.join(supported_benchmarks)}"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # Check if dataset is required but not provided
+        if normalized_benchmark_type in ['prompt_injection', 'visual_prompt_injection'] and not dataset:
+            error_msg = f"Dataset must be specified for benchmark type: {benchmark_type}"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # Ensure dataset exists for dataset-based benchmarks
+        if dataset and not self.dataset_manager.dataset_exists(normalized_benchmark_type, dataset):
+            self.logger.info(f"Dataset {dataset} not found locally. Attempting to download...")
+            if not self.dataset_manager.download_dataset(normalized_benchmark_type, dataset):
+                error_msg = f"Failed to download dataset: {dataset}"
+                self.logger.error(error_msg)
+                raise ValueError(error_msg)
         
         # Set up environment variables for API keys
         env = os.environ.copy()
@@ -69,15 +98,20 @@ class BenchmarkRunner:
             cmd = self._build_benchmark_command(
                 model_name=model_name,
                 provider=provider,
-                benchmark_type=benchmark_type,
-                output_dir=temp_dir
+                benchmark_type=normalized_benchmark_type,
+                output_dir=temp_dir,
+                dataset=dataset
             )
             
             # Run benchmark in a separate thread to avoid blocking the UI
             results = self._run_benchmark_process(cmd, env, temp_dir, callback)
             
+            # Add dataset info to results if applicable
+            if dataset:
+                results['dataset'] = dataset
+            
             # Save results to file
-            results_path = save_benchmark_results(results, model_name, benchmark_type)
+            results_path = save_benchmark_results(results, model_name, benchmark_type, dataset)
             
             # Add file path to results
             results['file_path'] = results_path
@@ -88,7 +122,8 @@ class BenchmarkRunner:
                                 model_name: str, 
                                 provider: str, 
                                 benchmark_type: str,
-                                output_dir: str) -> List[str]:
+                                output_dir: str,
+                                dataset: Optional[str] = None) -> List[str]:
         """
         Build the command to run the CyberSecEval 3 benchmark
         
@@ -97,6 +132,7 @@ class BenchmarkRunner:
             provider: Provider of the model
             benchmark_type: Type of benchmark
             output_dir: Directory to output results
+            dataset: Optional dataset name for benchmarks that require datasets
             
         Returns:
             List of command arguments
@@ -104,7 +140,7 @@ class BenchmarkRunner:
         # This would need to be adapted to the actual CyberSecEval 3 CLI interface
         # The following is a placeholder based on typical CLI patterns
         
-        if benchmark_type.lower() == 'mitre':
+        if benchmark_type == 'mitre':
             return [
                 "cyberseceval",  # Replace with actual command
                 "run",
@@ -114,13 +150,37 @@ class BenchmarkRunner:
                 "--output-dir", output_dir,
                 "--format", "json"
             ]
-        elif benchmark_type.lower() == 'frr':
+        elif benchmark_type == 'frr':
             return [
                 "cyberseceval",  # Replace with actual command
                 "run",
                 "--model", model_name,
                 "--provider", provider,
                 "--benchmark", "frr",
+                "--output-dir", output_dir,
+                "--format", "json"
+            ]
+        elif benchmark_type == 'prompt_injection':
+            dataset_path = self.dataset_manager.get_dataset_path(benchmark_type, dataset)
+            return [
+                "cyberseceval",  # Replace with actual command
+                "run",
+                "--model", model_name,
+                "--provider", provider,
+                "--benchmark", "prompt-injection",
+                "--dataset", dataset_path,
+                "--output-dir", output_dir,
+                "--format", "json"
+            ]
+        elif benchmark_type == 'visual_prompt_injection':
+            dataset_path = self.dataset_manager.get_dataset_path(benchmark_type, dataset)
+            return [
+                "cyberseceval",  # Replace with actual command
+                "run",
+                "--model", model_name,
+                "--provider", provider,
+                "--benchmark", "visual-prompt-injection",
+                "--dataset", dataset_path,
                 "--output-dir", output_dir,
                 "--format", "json"
             ]
@@ -163,25 +223,26 @@ class BenchmarkRunner:
         
         # Simulate reading results from output directory
         # In production, we would parse the actual output files
-        results = self._generate_sample_results(cmd[3], cmd[5])  # model_name, benchmark_type
+        results = self._generate_sample_results(cmd[3], cmd[5], dataset=None if len(cmd) < 8 else cmd[7])  # model_name, benchmark_type, dataset
         
         if callback:
             callback(1.0, "Benchmark completed!")
         
         return results
     
-    def _generate_sample_results(self, model_name: str, benchmark_type: str) -> Dict[str, Any]:
+    def _generate_sample_results(self, model_name: str, benchmark_type: str, dataset: Optional[str] = None) -> Dict[str, Any]:
         """
         Generate sample benchmark results for development/testing
         
         Args:
             model_name: Name of the model
             benchmark_type: Type of benchmark
+            dataset: Optional dataset name
             
         Returns:
             Dict containing simulated benchmark results
         """
-        if benchmark_type.lower() == 'mitre':
+        if benchmark_type == 'mitre':
             return {
                 "benchmark": "MITRE ATT&CK",
                 "model": model_name,
@@ -232,7 +293,7 @@ class BenchmarkRunner:
                     # Additional test results would be included here
                 ]
             }
-        elif benchmark_type.lower() == 'frr':
+        elif benchmark_type == 'frr':
             return {
                 "benchmark": "Foundational Responsible Release (FRR)",
                 "model": model_name,
@@ -277,6 +338,70 @@ class BenchmarkRunner:
                     },
                     # Additional test results would be included here
                 ]
+            }
+        elif benchmark_type == 'prompt_injection':
+            return {
+                "benchmark": "Prompt Injection",
+                "model": model_name,
+                "dataset": dataset,
+                "timestamp": time.time(),
+                "overall_score": 0.68,  # Sample score
+                "total_samples": 100,
+                "successful_defenses": 68,
+                "categories": {
+                    "direct_injection": {
+                        "score": 0.75,
+                        "tests_passed": 15,
+                        "tests_total": 20
+                    },
+                    "indirect_injection": {
+                        "score": 0.65,
+                        "tests_passed": 13,
+                        "tests_total": 20
+                    },
+                    "goal_hijacking": {
+                        "score": 0.60,
+                        "tests_passed": 12,
+                        "tests_total": 20
+                    },
+                    "jailbreaking": {
+                        "score": 0.70,
+                        "tests_passed": 28,
+                        "tests_total": 40
+                    }
+                }
+            }
+        elif benchmark_type == 'visual_prompt_injection':
+            return {
+                "benchmark": "Visual Prompt Injection",
+                "model": model_name,
+                "dataset": dataset,
+                "timestamp": time.time(),
+                "overall_score": 0.72,  # Sample score
+                "total_samples": 50,
+                "successful_defenses": 36,
+                "categories": {
+                    "typographic_attacks": {
+                        "score": 0.85,
+                        "tests_passed": 11,
+                        "tests_total": 13
+                    },
+                    "adversarial_overlays": {
+                        "score": 0.65,
+                        "tests_passed": 8,
+                        "tests_total": 12
+                    },
+                    "adversarial_patches": {
+                        "score": 0.70,
+                        "tests_passed": 7,
+                        "tests_total": 10
+                    },
+                    "qr_codes": {
+                        "score": 0.67,
+                        "tests_passed": 10,
+                        "tests_total": 15
+                    }
+                }
             }
         else:
             return {"error": f"Unknown benchmark type: {benchmark_type}"}

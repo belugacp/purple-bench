@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-03-23
+
+### Added
+- Support for Textual Prompt Injection benchmarks with configurable datasets
+- Support for Visual Prompt Injection benchmarks with configurable datasets
+- New DatasetManager class for managing benchmark datasets
+- Dataset downloading functionality for prompt injection datasets
+- Enhanced benchmark results display to show dataset information
+
+### Changed
+- Updated BenchmarkRunner to support dataset parameters
+- Updated UI to include dataset selection for prompt injection benchmarks
+- Improved error handling and logging for benchmark runs
+
 ## [0.3.7] - 2025-03-23
 
 ### Added
