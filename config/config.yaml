@@ -3,7 +3,7 @@
 # Application Settings
 application:
   name: "Purple Bench"
-  version: "0.4.0"  # Updated version to match CHANGELOG
+  version: "0.4.1"  # Updated version to match CHANGELOG
   log_level: "INFO"
   results_directory: "/Users/brad/Documents/windsurf/purple-bench/data/results"
   logs_directory: "../logs"
